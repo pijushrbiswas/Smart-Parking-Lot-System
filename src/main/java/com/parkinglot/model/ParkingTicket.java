@@ -1,6 +1,7 @@
 package com.parkinglot.model;
 
-import com.parkinglot.exception.TicketAlreadyClosedException;
+import com.parkinglot.exception.ErrorCode;
+import com.parkinglot.exception.ParkingException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -33,7 +34,7 @@ public final class ParkingTicket {
         Objects.requireNonNull(exitTime, "exitTime");
         Objects.requireNonNull(fee, "fee");
         if (status == TicketStatus.CLOSED) {
-            throw new TicketAlreadyClosedException(id);
+            throw new ParkingException(ErrorCode.TICKET_ALREADY_CLOSED, "Ticket already closed: " + id);
         }
         if (exitTime.isBefore(entryTime)) {
             throw new IllegalArgumentException("Exit time " + exitTime + " is before entry time " + entryTime);

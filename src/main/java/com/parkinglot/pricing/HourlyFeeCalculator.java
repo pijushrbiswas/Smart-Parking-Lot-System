@@ -1,7 +1,7 @@
 package com.parkinglot.pricing;
 
-import com.parkinglot.exception.InvalidConfigurationException;
-import com.parkinglot.exception.PricingException;
+import com.parkinglot.exception.ErrorCode;
+import com.parkinglot.exception.ParkingException;
 import com.parkinglot.model.VehicleType;
 
 import java.math.BigDecimal;
@@ -21,13 +21,13 @@ public class HourlyFeeCalculator implements FeeCalculator {
 
     public HourlyFeeCalculator(Map<VehicleType, BigDecimal> hourlyRates, Duration gracePeriod) {
         if (gracePeriod == null || gracePeriod.isNegative()) {
-            throw new InvalidConfigurationException("Grace period must be non-negative");
+            throw new ParkingException(ErrorCode.INVALID_CONFIGURATION, "Grace period must be non-negative");
         }
         // Fail fast at startup rather than at a customer's exit gate.
         for (VehicleType type : VehicleType.values()) {
             BigDecimal rate = hourlyRates.get(type);
             if (rate == null || rate.signum() < 0) {
-                throw new InvalidConfigurationException("Missing or negative hourly rate for " + type);
+                throw new ParkingException(ErrorCode.INVALID_CONFIGURATION, "Missing or negative hourly rate for " + type);
             }
         }
         this.hourlyRates = new EnumMap<>(hourlyRates);
@@ -37,7 +37,7 @@ public class HourlyFeeCalculator implements FeeCalculator {
     @Override
     public BigDecimal calculate(VehicleType vehicleType, Duration duration) {
         if (vehicleType == null || duration == null || duration.isNegative()) {
-            throw new PricingException("Invalid pricing input: type=" + vehicleType + ", duration=" + duration);
+            throw new ParkingException(ErrorCode.PRICING_ERROR, "Invalid pricing input: type=" + vehicleType + ", duration=" + duration);
         }
         if (duration.compareTo(gracePeriod) <= 0) {
             return BigDecimal.ZERO.setScale(2);

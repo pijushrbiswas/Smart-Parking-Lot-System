@@ -21,10 +21,6 @@ public class ParkingEventPublisher {
         listeners.add(Objects.requireNonNull(listener, "listener"));
     }
 
-    public void unsubscribe(ParkingEventListener listener) {
-        listeners.remove(listener);
-    }
-
     public void publish(ParkingEvent event) {
         for (ParkingEventListener listener : listeners) {
             try {

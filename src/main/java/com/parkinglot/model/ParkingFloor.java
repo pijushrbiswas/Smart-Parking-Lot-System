@@ -37,10 +37,6 @@ public final class ParkingFloor {
         return level;
     }
 
-    public List<ParkingSpot> spots() {
-        return spots;
-    }
-
     public Optional<ParkingSpot> tryAcquire(SpotSize size) {
         ParkingSpot spot = freeSpots.get(size).pollFirst();
         if (spot != null) {

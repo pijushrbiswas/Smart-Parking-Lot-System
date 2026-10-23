@@ -6,13 +6,7 @@ import com.parkinglot.allocation.SpotAllocationStrategy;
 import com.parkinglot.event.ParkingEvent;
 import com.parkinglot.event.ParkingEventPublisher;
 import com.parkinglot.exception.ErrorCode;
-import com.parkinglot.exception.NoAvailableSpotException;
 import com.parkinglot.exception.ParkingException;
-import com.parkinglot.exception.PricingException;
-import com.parkinglot.exception.TicketAlreadyClosedException;
-import com.parkinglot.exception.TicketNotFoundException;
-import com.parkinglot.exception.VehicleAlreadyParkedException;
-import com.parkinglot.exception.VehicleNotParkedException;
 import com.parkinglot.model.ParkingLot;
 import com.parkinglot.model.ParkingTicket;
 import com.parkinglot.model.Receipt;
@@ -22,7 +16,6 @@ import com.parkinglot.model.Vehicle;
 import com.parkinglot.model.VehicleType;
 import com.parkinglot.pricing.FeeCalculator;
 import com.parkinglot.pricing.HourlyFeeCalculator;
-import com.parkinglot.repository.InMemoryTicketRepository;
 import com.parkinglot.util.SimulatedClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +34,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.parkinglot.ParkingAssertions.assertError;
 import static org.junit.jupiter.api.Assertions.*;
 
 class DefaultParkingServiceTest {
@@ -64,7 +58,7 @@ class DefaultParkingServiceTest {
     }
 
     private ParkingService service(ParkingLot lot, SpotAllocationStrategy strategy, FeeCalculator fees) {
-        return new DefaultParkingService(lot, strategy, fees, new InMemoryTicketRepository(), publisher, clock);
+        return new DefaultParkingService(lot, strategy, fees, publisher, clock);
     }
 
     private static Vehicle car(String plate) {
@@ -92,9 +86,7 @@ class DefaultParkingServiceTest {
     void neverPutsLargerVehicleInSmallerSpot() {
         ParkingService svc = service(ParkingLot.builder("L").addFloor(0, 5, 5, 0).build());
 
-        NoAvailableSpotException e = assertThrows(NoAvailableSpotException.class,
-                () -> svc.checkIn(new Vehicle("B1", VehicleType.BUS)));
-        assertEquals(ErrorCode.NO_SPOT_AVAILABLE, e.getErrorCode());
+        assertError(ErrorCode.NO_SPOT_AVAILABLE, () -> svc.checkIn(new Vehicle("B1", VehicleType.BUS)));
     }
 
     @Test
@@ -113,7 +105,7 @@ class DefaultParkingServiceTest {
         ParkingService svc = service(ParkingLot.builder("L").addFloor(0, 0, 3, 0).build());
         svc.checkIn(car("KA01AB1234"));
 
-        assertThrows(VehicleAlreadyParkedException.class, () -> svc.checkIn(car("ka01 ab1234")));
+        assertError(ErrorCode.VEHICLE_ALREADY_PARKED, () -> svc.checkIn(car("ka01 ab1234")));
         assertEquals(2, svc.getAvailability().getFirst().available().get(SpotSize.MEDIUM),
                 "failed duplicate check-in must not consume a spot");
     }
@@ -139,10 +131,30 @@ class DefaultParkingServiceTest {
         ParkingTicket ticket = svc.checkIn(car("C1"));
         svc.checkOut(ticket.id());
 
-        assertThrows(TicketAlreadyClosedException.class, () -> svc.checkOut(ticket.id()));
-        assertThrows(TicketNotFoundException.class, () -> svc.checkOut("nope"));
-        assertThrows(TicketNotFoundException.class, () -> svc.checkOut(null));
-        assertThrows(VehicleNotParkedException.class, () -> svc.checkOutByLicensePlate("C1"));
+        assertError(ErrorCode.TICKET_ALREADY_CLOSED, () -> svc.checkOut(ticket.id()));
+        assertError(ErrorCode.TICKET_NOT_FOUND, () -> svc.checkOut("nope"));
+        assertError(ErrorCode.TICKET_NOT_FOUND, () -> svc.checkOut(null));
+        assertError(ErrorCode.VEHICLE_NOT_PARKED, () -> svc.checkOutByLicensePlate("C1"));
+    }
+
+    @Test
+    void rejectsInvalidInputAtTheBoundary() {
+        ParkingService svc = service(ParkingLot.builder("L").addFloor(0, 0, 1, 0).build());
+
+        assertError(ErrorCode.INVALID_VEHICLE, () -> svc.checkIn(null));
+        assertError(ErrorCode.INVALID_VEHICLE, () -> svc.checkOutByLicensePlate(null));
+        assertError(ErrorCode.INVALID_VEHICLE, () -> svc.checkOutByLicensePlate("  "));
+    }
+
+    @Test
+    void exitEventReportsTheFloorThatWasFreed() {
+        List<ParkingEvent> received = new ArrayList<>();
+        publisher.subscribe(received::add);
+        ParkingService svc = service(ParkingLot.builder("L").addFloor(0, 0, 0, 0).addFloor(3, 0, 1, 0).build());
+
+        svc.checkOut(svc.checkIn(car("C1")).id());
+
+        assertEquals(List.of(3, 3), received.stream().map(ParkingEvent::floorLevel).toList());
     }
 
     @Test
@@ -157,14 +169,14 @@ class DefaultParkingServiceTest {
     void pricingFailureLeavesSessionIntact() {
         AtomicInteger calls = new AtomicInteger();
         FeeCalculator flaky = (type, d) -> {
-            if (calls.getAndIncrement() == 0) throw new PricingException("rate service down");
+            if (calls.getAndIncrement() == 0) throw new ParkingException(ErrorCode.PRICING_ERROR, "rate service down");
             return BigDecimal.TEN;
         };
         ParkingService svc = service(ParkingLot.builder("L").addFloor(0, 0, 1, 0).build(),
                 new BestFitAllocationStrategy(), flaky);
         ParkingTicket ticket = svc.checkIn(car("C1"));
 
-        assertThrows(PricingException.class, () -> svc.checkOut(ticket.id()));
+        assertError(ErrorCode.PRICING_ERROR, () -> svc.checkOut(ticket.id()));
         assertEquals(TicketStatus.ACTIVE, ticket.status());
         assertEquals(BigDecimal.TEN, svc.checkOut(ticket.id()).fee());
     }
@@ -201,7 +213,8 @@ class DefaultParkingServiceTest {
                     start.await();
                     try {
                         assertTrue(assignedSpots.add(svc.checkIn(car(plate)).spot().id()), "spot double-booked");
-                    } catch (NoAvailableSpotException e) {
+                    } catch (ParkingException e) {
+                        assertEquals(ErrorCode.NO_SPOT_AVAILABLE, e.getErrorCode());
                         rejected.incrementAndGet();
                     }
                     return null;
@@ -230,7 +243,8 @@ class DefaultParkingServiceTest {
                     try {
                         svc.checkIn(car("SAME1"));
                         admitted.incrementAndGet();
-                    } catch (VehicleAlreadyParkedException ignored) {
+                    } catch (ParkingException e) {
+                        assertEquals(ErrorCode.VEHICLE_ALREADY_PARKED, e.getErrorCode());
                     }
                     return null;
                 }));

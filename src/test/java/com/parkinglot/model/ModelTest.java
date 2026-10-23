@@ -1,14 +1,13 @@
 package com.parkinglot.model;
 
-import com.parkinglot.exception.InvalidConfigurationException;
-import com.parkinglot.exception.InvalidVehicleException;
-import com.parkinglot.exception.TicketAlreadyClosedException;
+import com.parkinglot.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
+import static com.parkinglot.ParkingAssertions.assertError;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ModelTest {
@@ -16,10 +15,10 @@ class ModelTest {
     @Test
     void vehicleValidationAndNormalisation() {
         assertEquals("KA01AB1234", new Vehicle(" ka01 ab 1234 ", VehicleType.CAR).licensePlate());
-        assertThrows(InvalidVehicleException.class, () -> new Vehicle(null, VehicleType.CAR));
-        assertThrows(InvalidVehicleException.class, () -> new Vehicle("  ", VehicleType.CAR));
-        assertThrows(InvalidVehicleException.class, () -> new Vehicle("AB#12", VehicleType.CAR));
-        assertThrows(InvalidVehicleException.class, () -> new Vehicle("AB12", null));
+        assertError(ErrorCode.INVALID_VEHICLE, () -> new Vehicle(null, VehicleType.CAR));
+        assertError(ErrorCode.INVALID_VEHICLE, () -> new Vehicle("  ", VehicleType.CAR));
+        assertError(ErrorCode.INVALID_VEHICLE, () -> new Vehicle("AB#12", VehicleType.CAR));
+        assertError(ErrorCode.INVALID_VEHICLE, () -> new Vehicle("AB12", null));
     }
 
     @Test
@@ -30,11 +29,11 @@ class ModelTest {
 
     @Test
     void builderValidation() {
-        assertThrows(InvalidConfigurationException.class, () -> ParkingLot.builder("L").build());
-        assertThrows(InvalidConfigurationException.class, () -> ParkingLot.builder(" ").addFloor(0, 1, 1, 1).build());
-        assertThrows(InvalidConfigurationException.class, () -> ParkingLot.builder("L").addFloor(0, 0, 0, 0).build());
-        assertThrows(InvalidConfigurationException.class, () -> ParkingLot.builder("L").addFloor(0, -1, 1, 1));
-        assertThrows(InvalidConfigurationException.class,
+        assertError(ErrorCode.INVALID_CONFIGURATION, () -> ParkingLot.builder("L").build());
+        assertError(ErrorCode.INVALID_CONFIGURATION, () -> ParkingLot.builder(" ").addFloor(0, 1, 1, 1).build());
+        assertError(ErrorCode.INVALID_CONFIGURATION, () -> ParkingLot.builder("L").addFloor(0, 0, 0, 0).build());
+        assertError(ErrorCode.INVALID_CONFIGURATION, () -> ParkingLot.builder("L").addFloor(0, -1, 1, 1));
+        assertError(ErrorCode.INVALID_CONFIGURATION,
                 () -> ParkingLot.builder("L").addFloor(0, 1, 1, 1).addFloor(0, 1, 1, 1));
     }
 
@@ -62,6 +61,6 @@ class ModelTest {
 
         assertThrows(IllegalArgumentException.class, () -> ticket.close(entry.minusSeconds(1), BigDecimal.ONE));
         ticket.close(entry.plusSeconds(60), BigDecimal.ONE);
-        assertThrows(TicketAlreadyClosedException.class, () -> ticket.close(entry.plusSeconds(120), BigDecimal.ONE));
+        assertError(ErrorCode.TICKET_ALREADY_CLOSED, () -> ticket.close(entry.plusSeconds(120), BigDecimal.ONE));
     }
 }

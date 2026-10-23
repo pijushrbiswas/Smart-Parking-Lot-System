@@ -12,7 +12,6 @@ import com.parkinglot.model.VehicleType;
 import com.parkinglot.pricing.DailyCapFeeCalculator;
 import com.parkinglot.pricing.FeeCalculator;
 import com.parkinglot.pricing.HourlyFeeCalculator;
-import com.parkinglot.repository.InMemoryTicketRepository;
 import com.parkinglot.service.DefaultParkingService;
 import com.parkinglot.service.ParkingService;
 import com.parkinglot.util.SimulatedClock;
@@ -53,7 +52,7 @@ public class Main {
 
         SimulatedClock clock = new SimulatedClock(Instant.parse("2026-10-22T08:00:00Z"));
         ParkingService service = new DefaultParkingService(
-                lot, new BestFitAllocationStrategy(), pricing, new InMemoryTicketRepository(), publisher, clock);
+                lot, new BestFitAllocationStrategy(), pricing, publisher, clock);
 
         System.out.println("== Check-in ==");
         ParkingTicket car = service.checkIn(new Vehicle("KA01AB1234", VehicleType.CAR));

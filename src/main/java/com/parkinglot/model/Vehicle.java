@@ -1,6 +1,7 @@
 package com.parkinglot.model;
 
-import com.parkinglot.exception.InvalidVehicleException;
+import com.parkinglot.exception.ErrorCode;
+import com.parkinglot.exception.ParkingException;
 
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -16,14 +17,14 @@ public record Vehicle(String licensePlate, VehicleType type) {
 
     public Vehicle {
         if (licensePlate == null || licensePlate.isBlank()) {
-            throw new InvalidVehicleException("License plate must not be blank");
+            throw new ParkingException(ErrorCode.INVALID_VEHICLE, "License plate must not be blank");
         }
         if (type == null) {
-            throw new InvalidVehicleException("Vehicle type must not be null");
+            throw new ParkingException(ErrorCode.INVALID_VEHICLE, "Vehicle type must not be null");
         }
         licensePlate = normalise(licensePlate);
         if (!PLATE_PATTERN.matcher(licensePlate).matches()) {
-            throw new InvalidVehicleException("Invalid license plate: " + licensePlate);
+            throw new ParkingException(ErrorCode.INVALID_VEHICLE, "Invalid license plate: " + licensePlate);
         }
     }
 

@@ -1,6 +1,7 @@
 package com.parkinglot.pricing;
 
-import com.parkinglot.exception.InvalidConfigurationException;
+import com.parkinglot.exception.ErrorCode;
+import com.parkinglot.exception.ParkingException;
 import com.parkinglot.model.VehicleType;
 
 import java.math.BigDecimal;
@@ -22,12 +23,12 @@ public class DailyCapFeeCalculator implements FeeCalculator {
 
     public DailyCapFeeCalculator(FeeCalculator delegate, Map<VehicleType, BigDecimal> dailyCaps) {
         if (delegate == null) {
-            throw new InvalidConfigurationException("Delegate fee calculator must not be null");
+            throw new ParkingException(ErrorCode.INVALID_CONFIGURATION, "Delegate fee calculator must not be null");
         }
         for (VehicleType type : VehicleType.values()) {
             BigDecimal cap = dailyCaps.get(type);
             if (cap == null || cap.signum() < 0) {
-                throw new InvalidConfigurationException("Missing or negative daily cap for " + type);
+                throw new ParkingException(ErrorCode.INVALID_CONFIGURATION, "Missing or negative daily cap for " + type);
             }
         }
         this.delegate = delegate;

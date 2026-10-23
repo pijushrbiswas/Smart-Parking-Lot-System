@@ -1,6 +1,7 @@
 package com.parkinglot.model;
 
-import com.parkinglot.exception.InvalidConfigurationException;
+import com.parkinglot.exception.ErrorCode;
+import com.parkinglot.exception.ParkingException;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -56,10 +57,10 @@ public final class ParkingLot {
 
         public Builder addFloor(int level, int smallSpots, int mediumSpots, int largeSpots) {
             if (spotsByLevel.containsKey(level)) {
-                throw new InvalidConfigurationException("Duplicate floor level " + level);
+                throw new ParkingException(ErrorCode.INVALID_CONFIGURATION, "Duplicate floor level " + level);
             }
             if (smallSpots < 0 || mediumSpots < 0 || largeSpots < 0) {
-                throw new InvalidConfigurationException("Spot counts must be non-negative on floor " + level);
+                throw new ParkingException(ErrorCode.INVALID_CONFIGURATION, "Spot counts must be non-negative on floor " + level);
             }
             List<ParkingSpot> spots = new ArrayList<>();
             int number = 1;
@@ -72,13 +73,13 @@ public final class ParkingLot {
 
         public ParkingLot build() {
             if (name == null || name.isBlank()) {
-                throw new InvalidConfigurationException("Parking lot name must not be blank");
+                throw new ParkingException(ErrorCode.INVALID_CONFIGURATION, "Parking lot name must not be blank");
             }
             if (spotsByLevel.isEmpty()) {
-                throw new InvalidConfigurationException("Parking lot must have at least one floor");
+                throw new ParkingException(ErrorCode.INVALID_CONFIGURATION, "Parking lot must have at least one floor");
             }
             if (spotsByLevel.values().stream().allMatch(List::isEmpty)) {
-                throw new InvalidConfigurationException("Parking lot must have at least one spot");
+                throw new ParkingException(ErrorCode.INVALID_CONFIGURATION, "Parking lot must have at least one spot");
             }
             List<ParkingFloor> floors = spotsByLevel.entrySet().stream()
                     .map(e -> new ParkingFloor(e.getKey(), e.getValue()))

@@ -1,7 +1,6 @@
 package com.parkinglot.pricing;
 
-import com.parkinglot.exception.InvalidConfigurationException;
-import com.parkinglot.exception.PricingException;
+import com.parkinglot.exception.ErrorCode;
 import com.parkinglot.model.VehicleType;
 import org.junit.jupiter.api.Test;
 
@@ -9,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.Map;
 
+import static com.parkinglot.ParkingAssertions.assertError;
 import static org.junit.jupiter.api.Assertions.*;
 
 class FeeCalculatorTest {
@@ -24,6 +24,14 @@ class FeeCalculatorTest {
     }
 
     @Test
+    void graceAndHourBoundaries() {
+        assertEquals(new BigDecimal("0.00"), hourly.calculate(VehicleType.CAR, Duration.ZERO));
+        assertEquals(new BigDecimal("20.00"), hourly.calculate(VehicleType.CAR, Duration.ofMinutes(10).plusSeconds(1)));
+        assertEquals(new BigDecimal("20.00"), hourly.calculate(VehicleType.CAR, Duration.ofHours(1)));
+        assertEquals(new BigDecimal("40.00"), hourly.calculate(VehicleType.CAR, Duration.ofHours(1).plusSeconds(1)));
+    }
+
+    @Test
     void billsEveryStartedHourPerVehicleType() {
         assertEquals(new BigDecimal("20.00"), hourly.calculate(VehicleType.CAR, Duration.ofMinutes(11)));
         assertEquals(new BigDecimal("20.00"), hourly.calculate(VehicleType.CAR, Duration.ofMinutes(60)));
@@ -34,15 +42,15 @@ class FeeCalculatorTest {
 
     @Test
     void rejectsInvalidInput() {
-        assertThrows(PricingException.class, () -> hourly.calculate(VehicleType.CAR, Duration.ofMinutes(-1)));
-        assertThrows(PricingException.class, () -> hourly.calculate(null, Duration.ZERO));
+        assertError(ErrorCode.PRICING_ERROR, () -> hourly.calculate(VehicleType.CAR, Duration.ofMinutes(-1)));
+        assertError(ErrorCode.PRICING_ERROR, () -> hourly.calculate(null, Duration.ZERO));
     }
 
     @Test
     void failsFastOnIncompleteRateCard() {
-        assertThrows(InvalidConfigurationException.class,
+        assertError(ErrorCode.INVALID_CONFIGURATION,
                 () -> new HourlyFeeCalculator(Map.of(VehicleType.CAR, BigDecimal.ONE), Duration.ZERO));
-        assertThrows(InvalidConfigurationException.class,
+        assertError(ErrorCode.INVALID_CONFIGURATION,
                 () -> new HourlyFeeCalculator(Map.of(
                         VehicleType.MOTORCYCLE, BigDecimal.ONE,
                         VehicleType.CAR, BigDecimal.ONE,
@@ -60,6 +68,17 @@ class FeeCalculatorTest {
         assertEquals(new BigDecimal("150.00"), capped.calculate(VehicleType.CAR, Duration.ofHours(10)));
         assertEquals(new BigDecimal("150.00"), capped.calculate(VehicleType.CAR, Duration.ofHours(24)));
         // 1 full day (150) + 2h (40)
-        assertEquals(new BigDecimal("190.00"), capped.calculate(VehicleType.CAR, Duration.ofHours(26)));
+        assertEquals(new BigDecimal("190.00"), capped.calculate(VehicleType.CAR, Duration.ofHours(26)));        assertEquals(new BigDecimal("300.00"), capped.calculate(VehicleType.CAR, Duration.ofDays(2)));
+        // Remainder after a full day is still subject to the grace period.
+        assertEquals(new BigDecimal("150.00"), capped.calculate(VehicleType.CAR, Duration.ofDays(1).plusMinutes(5)));
+    }
+
+    @Test
+    void dailyCapFailsFastOnBadConfiguration() {
+        Map<VehicleType, BigDecimal> caps = Map.of(
+                VehicleType.MOTORCYCLE, BigDecimal.ONE, VehicleType.CAR, BigDecimal.ONE, VehicleType.BUS, BigDecimal.ONE);
+        assertError(ErrorCode.INVALID_CONFIGURATION, () -> new DailyCapFeeCalculator(null, caps));
+        assertError(ErrorCode.INVALID_CONFIGURATION,
+                () -> new DailyCapFeeCalculator(hourly, Map.of(VehicleType.CAR, BigDecimal.ONE)));
     }
 }
